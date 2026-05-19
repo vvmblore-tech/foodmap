@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="theme-color" content="#7F77DD"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Food Map"/>
+<link rel="manifest" href="/manifest.json"/>
+<link rel="apple-touch-icon" href="/icon-192.png"/>
+<title>My Food Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --p:#7F77DD;--pd:#534AB7;--pl:#EEEDFE;--pt:#3C3489;
+  --tl:#E1F5EE;--tt:#085041;--al:#FAEEDA;--at:#633806;
+  --red:#E24B4A;--bg:#f5f5f3;
+  --border:rgba(0,0,0,0.1);--border2:rgba(0,0,0,0.18);
+  --txt:#1a1a1a;--txt2:#666;--txt3:#999;
+  --sur:#fff;--sur2:#f7f7f5;
+  --rad:12px;--rad2:8px;
+  --sb:env(safe-area-inset-bottom,0px);--st:env(safe-area-inset-top,0px);
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#111;--border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.18);
+    --txt:#f0f0f0;--txt2:#aaa;--txt3:#555;--sur:#1c1c1e;--sur2:#2c2c2e;
+    --pl:#2a2866;--pt:#b0acf0;--tl:#0a3028;--tt:#5dcaa5;--al:#3a2a0a;--at:#f0b04a;
+  }
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--txt)}
+#app{display:flex;flex-direction:column;height:100vh;height:-webkit-fill-available;max-width:500px;margin:0 auto;background:var(--sur);overflow:hidden;position:relative}
+
+.topbar{padding:calc(10px + var(--st)) 14px 0;background:var(--sur);border-bottom:.5px solid var(--border);flex-shrink:0;z-index:400}
+.tr1{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.title{font-size:16px;font-weight:700;color:var(--txt)}
+.cpill{font-size:11px;color:var(--txt3);font-weight:400;margin-left:5px}
+.tabs{display:flex;background:var(--sur2);border-radius:20px;padding:2px}
+.tab{padding:5px 15px;border-radius:18px;font-size:12px;border:none;background:transparent;cursor:pointer;color:var(--txt2);font-weight:500;transition:all .15s;font-family:inherit}
+.tab.active{background:var(--sur);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.frow{display:flex;gap:6px;padding:8px 0;overflow-x:auto;scrollbar-width:none;align-items:center}
+.frow::-webkit-scrollbar{display:none}
+.fsel{flex-shrink:0;font-size:12px;padding:5px 22px 5px 9px;border-radius:20px;border:.5px solid var(--border2);background:var(--sur2);color:var(--txt2);font-family:inherit;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;outline:none}
+.fsel.on{background:var(--pl);color:var(--pt);border-color:var(--p)}
+.clr{flex-shrink:0;padding:5px 10px;font-size:12px;border:.5px solid var(--border);border-radius:20px;background:transparent;color:var(--txt3);cursor:pointer;font-family:inherit}
+
+.content{flex:1;overflow:hidden;position:relative}
+#mapView{width:100%;height:100%;position:relative}
+#map{width:100%;height:100%}
+#map.pinmode{cursor:crosshair}
+#listView{height:100%;overflow-y:auto;padding:10px;display:none;-webkit-overflow-scrolling:touch}
+
+.pin-banner{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--p);color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;font-weight:600;z-index:410;pointer-events:none;white-space:nowrap;box-shadow:0 2px 12px rgba(127,119,221,.45)}
+.pin-cancel{position:absolute;top:10px;right:12px;background:var(--sur);color:var(--txt);border:.5px solid var(--border2);padding:7px 14px;border-radius:20px;font-size:13px;font-weight:500;z-index:410;cursor:pointer;font-family:inherit;box-shadow:0 1px 6px rgba(0,0,0,.1)}
+
+.card{background:var(--sur);border:.5px solid var(--border);border-radius:var(--rad);padding:11px 13px;margin-bottom:9px;cursor:pointer}
+.card:active{background:var(--sur2)}
+.crow{display:flex;gap:10px;align-items:flex-start}
+.cav{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.cbody{flex:1;min-width:0}
+.cname{font-size:14px;font-weight:600;color:var(--txt)}
+.caddr{font-size:11px;color:var(--txt3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cstars{font-size:12px;color:#EF9F27;flex-shrink:0;letter-spacing:-1px}
+.cdim{color:var(--border2)}
+.badges{margin-top:5px;display:flex;flex-wrap:wrap;gap:4px}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:500}
+.bw{background:var(--tl);color:var(--tt)}
+.bp{background:var(--al);color:var(--at)}
+.cnotes{font-size:11px;color:var(--txt2);margin-top:7px;padding-top:7px;border-top:.5px solid var(--border);line-height:1.5}
+.empty{text-align:center;padding:60px 20px;color:var(--txt3)}
+.empty-icon{font-size:34px;margin-bottom:10px}
+.empty-label{font-size:14px}
+
+/* Two FABs stacked */
+.fab{position:absolute;right:16px;width:50px;height:50px;border-radius:50%;border:none;color:#fff;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:400;transition:transform .1s,opacity .2s;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.fab:active{transform:scale(.92)}
+.fab-add{bottom:calc(20px + var(--sb));background:var(--p);box-shadow:0 4px 14px rgba(127,119,221,.45);font-size:26px}
+.fab-pin{bottom:calc(82px + var(--sb));background:var(--sur);color:var(--txt2);border:.5px solid var(--border2) !important;font-size:20px}
+
+.ov{position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:500;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .2s}
+.ov.open{opacity:1;pointer-events:all}
+.sheet{background:var(--sur);border-radius:18px 18px 0 0;width:100%;padding:18px 16px calc(18px + var(--sb));max-height:93vh;overflow-y:auto;-webkit-overflow-scrolling:touch;transform:translateY(30px);transition:transform .25s cubic-bezier(.32,.72,0,1)}
+.ov.open .sheet{transform:translateY(0)}
+.shandle{width:34px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 14px}
+.stitle{font-size:17px;font-weight:700;margin-bottom:16px;color:var(--txt)}
+
+.fg{margin-bottom:13px}
+.fl{display:block;font-size:12px;font-weight:500;color:var(--txt2);margin-bottom:5px}
+.fi{width:100%;padding:11px 12px;border:.5px solid var(--border2);border-radius:var(--rad2);font-size:14px;background:var(--sur);color:var(--txt);font-family:inherit;outline:none;transition:border-color .15s}
+.fi:focus{border-color:var(--p)}
+.fi::placeholder{color:var(--txt3)}
+textarea.fi{height:68px;resize:none;line-height:1.5}
+.fsel2{width:100%;padding:11px 32px 11px 12px;border:.5px solid var(--border2);border-radius:var(--rad2);font-size:14px;background:var(--sur);color:var(--txt);font-family:inherit;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;outline:none}
+.r2{display:flex;gap:10px}
+.r2 .fg{flex:1}
+
+.swrap{position:relative}
+.sdrop{position:absolute;top:calc(100% + 3px);left:0;right:0;background:var(--sur);border:.5px solid var(--border2);border-radius:var(--rad2);z-index:600;max-height:210px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.12)}
+.sdrop.hidden{display:none}
+.si{padding:10px 12px;cursor:pointer;border-bottom:.5px solid var(--border)}
+.si:last-child{border-bottom:none}
+.si:active{background:var(--sur2)}
+.sin{font-size:13px;font-weight:500;color:var(--txt)}
+.sia{font-size:11px;color:var(--txt3);margin-top:2px}
+.sloading{padding:11px 12px;font-size:13px;color:var(--txt3)}
+.selbox{background:var(--pl);border-radius:var(--rad2);padding:9px 11px;margin-bottom:13px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.selbox-name{font-size:13px;font-weight:600;color:var(--pt)}
+.selbox-addr{font-size:11px;color:var(--pt);opacity:.7;margin-top:2px}
+.selbox-x{background:none;border:none;color:var(--pt);font-size:16px;cursor:pointer;padding:0;opacity:.6;flex-shrink:0;line-height:1}
+
+.starrow{display:flex;gap:5px}
+.sb2{background:none;border:none;font-size:25px;cursor:pointer;color:#D3D1C7;padding:0;line-height:1;transition:color .1s}
+.sb2.lit{color:#EF9F27}
+
+.sbtns{display:flex;gap:9px;margin-top:4px}
+.bprimary{flex:1;padding:13px;background:var(--p);color:#fff;border:none;border-radius:var(--rad2);font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+.bprimary:active{background:var(--pd)}
+.bsec{padding:13px 16px;background:transparent;border:.5px solid var(--border2);border-radius:var(--rad2);font-size:15px;cursor:pointer;color:var(--txt2);font-family:inherit}
+.bedit{flex:1;padding:13px;background:var(--sur2);color:var(--txt);border:.5px solid var(--border2);border-radius:var(--rad2);font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+.bdanger{padding:13px 16px;background:var(--red);color:#fff;border:none;border-radius:var(--rad2);font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+
+#toast{position:absolute;bottom:calc(82px + var(--sb));left:50%;transform:translateX(-50%) translateY(16px);background:rgba(0,0,0,.78);color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;white-space:nowrap;opacity:0;transition:all .2s;pointer-events:none;z-index:900}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+#setup{position:absolute;inset:0;background:var(--sur);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 22px;overflow-y:auto}
+.si-icon{font-size:52px;margin-bottom:14px}
+.si-title{font-size:22px;font-weight:700;color:var(--txt);margin-bottom:7px;text-align:center}
+.si-sub{font-size:13px;color:var(--txt2);text-align:center;line-height:1.65;margin-bottom:28px}
+.si-input{width:100%;padding:12px 13px;border:.5px solid var(--border2);border-radius:var(--rad2);font-size:13px;background:var(--sur);color:var(--txt);font-family:monospace;margin-bottom:9px;outline:none}
+.si-input:focus{border-color:var(--p)}
+.si-btn{width:100%;padding:13px;background:var(--p);color:#fff;border:none;border-radius:var(--rad2);font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:4px}
+.si-div{width:100%;text-align:center;font-size:11px;color:var(--txt3);margin:8px 0}
+.si-note{font-size:11px;color:var(--txt3);margin-top:18px;text-align:center;line-height:1.65}
+
+/* Leaflet popup */
+.lpop{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-width:175px}
+.lpop-name{font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:3px}
+.lpop-addr{font-size:11px;color:#888;margin-bottom:5px;line-height:1.4}
+.lpop-badges{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px}
+.lpop-stars{color:#EF9F27;font-size:13px;letter-spacing:-1px}
+.lpop-notes{font-size:11px;color:#666;border-top:1px solid #eee;padding-top:5px;margin-top:5px;line-height:1.5}
+.lpop-btns{display:flex;gap:6px;margin-top:8px}
+.lpop-edit{flex:1;padding:7px;background:#f0f0f0;color:#333;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.lpop-del{flex:1;padding:7px;background:#E24B4A;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toast"></div>
+
+  <!-- Setup -->
+  <div id="setup" style="display:none">
+    <div class="si-icon">🍜</div>
+    <div class="si-title">My Food Map</div>
+    <div class="si-sub">Enter your Supabase credentials to sync across devices, or skip to save locally.</div>
+    <input class="si-input" id="cfgUrl" placeholder="Supabase URL  (https://xxxx.supabase.co)"/>
+    <input class="si-input" id="cfgKey" placeholder="Supabase anon key  (eyJ…)"/>
+    <button class="si-btn" onclick="saveSetup()">Connect & start</button>
+    <div class="si-div">or</div>
+    <button class="si-btn" style="background:var(--sur2);color:var(--txt);border:.5px solid var(--border2)" onclick="skipSetup()">Use locally on this device</button>
+    <div class="si-note">Your keys are stored only in this browser.<br>Nobody else can access your data.</div>
+  </div>
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="tr1">
+      <div class="title">my food map <span class="cpill" id="cpill"></span></div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('map')">Map</button>
+        <button class="tab" onclick="switchTab('list')">List</button>
+      </div>
+    </div>
+    <div class="frow">
+      <select class="fsel" id="fWho" onchange="applyFilters()"><option value="">Who</option></select>
+      <select class="fsel" id="fPrice" onchange="applyFilters()">
+        <option value="">Price</option>
+        <option>₹1–200</option><option>₹200–350</option><option>₹350–600</option><option>₹600+</option>
+      </select>
+      <select class="fsel" id="fRating" onchange="applyFilters()">
+        <option value="">Rating</option>
+        <option value="3">3★+</option><option value="4">4★+</option><option value="5">5★ only</option>
+      </select>
+      <button class="clr" onclick="clearFilters()">Clear</button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <div id="mapView">
+      <div id="map"></div>
+      <div class="pin-banner" id="pinBanner" style="display:none">Tap anywhere to drop a pin</div>
+      <button class="pin-cancel" id="pinCancel" style="display:none" onclick="exitPinMode()">Cancel</button>
+    </div>
+    <div id="listView"></div>
+  </div>
+
+  <!-- FAB: add via search -->
+  <button class="fab fab-add" onclick="openAdd(null)" title="Search & add a spot">+</button>
+
+  <!-- FAB: drop pin on map -->
+  <button class="fab fab-pin" id="fabPin" onclick="enterPinMode()" title="Tap map to pin a spot">📍</button>
+
+  <!-- Add / Edit sheet -->
+  <div class="ov" id="addOv" onclick="ovClick(event,'addOv')">
+    <div class="sheet">
+      <div class="shandle"></div>
+      <div class="stitle" id="addTitle">Add a spot</div>
+      <div class="fg">
+        <label class="fl">Place name</label>
+        <div class="swrap">
+          <input class="fi" id="fSearch" placeholder="Type a restaurant name…" autocomplete="off" oninput="onSearch(this.value)"/>
+          <div class="sdrop hidden" id="sdrop"></div>
+        </div>
+      </div>
+      <div id="selBox" style="display:none"></div>
+      <div class="fg">
+        <label class="fl">Who to take</label>
+        <input class="fi" id="fWhoI" placeholder="e.g. Priya, the whole gang, solo…"/>
+      </div>
+      <div class="r2">
+        <div class="fg">
+          <label class="fl">Price per head</label>
+          <select class="fsel2" id="fPriceI">
+            <option value="">Pick one</option>
+            <option>₹1–200</option><option>₹200–350</option><option>₹350–600</option><option>₹600+</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">Rating</label>
+          <div class="starrow">
+            <button class="sb2" onclick="setStar(1)">★</button>
+            <button class="sb2" onclick="setStar(2)">★</button>
+            <button class="sb2" onclick="setStar(3)">★</button>
+            <button class="sb2" onclick="setStar(4)">★</button>
+            <button class="sb2" onclick="setStar(5)">★</button>
+          </div>
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl">What to order / notes</label>
+        <textarea class="fi" id="fNotes" placeholder="Must try butter naan, avoid weekends…"></textarea>
+      </div>
+      <div class="sbtns">
+        <button class="bsec" onclick="closeOv('addOv')">Cancel</button>
+        <button class="bprimary" id="saveBtn" onclick="savePlace()">Save spot</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail sheet -->
+  <div class="ov" id="detOv" onclick="ovClick(event,'detOv')">
+    <div class="sheet" id="detSheet"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const CFG='fmap_cfg_v2', LOCAL='fmap_local_v2';
+const BLAT=12.9716, BLNG=77.5946;
+const COLORS=['#7F77DD','#1D9E75','#D85A30','#D4537E','#378ADD','#BA7517','#639922','#993556'];
+
+function getCfg(){try{return JSON.parse(localStorage.getItem(CFG)||'{}')}catch(e){return{}}}
+function setCfg(o){localStorage.setItem(CFG,JSON.stringify(o))}
+
+let places=[], starVal=0, selPlace=null, srchTimer=null;
+let currentTab='map', filters={who:'',price:'',rating:''};
+let map=null, layerGroup=null, sb=null;
+let pinMode=false, tempPin=null, editingId=null;
+
+// ── INIT ──────────────────────────────────────────
+async function init(){
+  const cfg=getCfg();
+  if(!cfg.configured){document.getElementById('setup').style.display='flex';return}
+  if(cfg.sbUrl&&cfg.sbKey){try{sb=window.supabase.createClient(cfg.sbUrl,cfg.sbKey)}catch(e){}}
+  await loadPlaces();
+  initMap();
+  render();
+}
+function saveSetup(){
+  const url=document.getElementById('cfgUrl').value.trim();
+  const key=document.getElementById('cfgKey').value.trim();
+  if(!url||!key){toast('Please fill in both fields');return}
+  setCfg({configured:true,sbUrl:url,sbKey:key});
+  document.getElementById('setup').style.display='none';
+  init();
+}
+function skipSetup(){
+  setCfg({configured:true});
+  document.getElementById('setup').style.display='none';
+  init();
+}
+
+// ── DATA ──────────────────────────────────────────
+async function loadPlaces(){
+  if(sb){
+    try{
+      const{data,error}=await sb.from('places').select('*').order('created_at',{ascending:false});
+      if(!error&&data){places=data;localStorage.setItem(LOCAL,JSON.stringify(places));return}
+    }catch(e){}
+  }
+  try{places=JSON.parse(localStorage.getItem(LOCAL)||'[]')}catch(e){places=[]}
+}
+
+async function persistPlace(p,isEdit){
+  if(isEdit){const i=places.findIndex(x=>x.id===p.id);if(i>-1)places[i]=p;else places.unshift(p)}
+  else places.unshift(p);
+  localStorage.setItem(LOCAL,JSON.stringify(places));
+  if(sb){
+    try{
+      if(isEdit){
+        await sb.from('places').update({name:p.name,address:p.address,lat:p.lat,lng:p.lng,who:p.who,price:p.price,rating:p.rating,notes:p.notes}).eq('id',p.id);
+      } else {
+        await sb.from('places').insert([{id:p.id,name:p.name,address:p.address,lat:p.lat,lng:p.lng,who:p.who,price:p.price,rating:p.rating,notes:p.notes,color:p.color}]);
+      }
+    }catch(e){toast('Saved locally')}
+  }
+}
+
+async function deletePlace(id){
+  places=places.filter(p=>p.id!==id);
+  localStorage.setItem(LOCAL,JSON.stringify(places));
+  if(sb){try{await sb.from('places').delete().eq('id',id)}catch(e){}}
+}
+
+// ── MAP ───────────────────────────────────────────
+function initMap(){
+  map=L.map('map',{zoomControl:false,attributionControl:false}).setView([BLAT,BLNG],13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+  L.control.zoom({position:'bottomleft'}).addTo(map);
+  layerGroup=L.layerGroup().addTo(map);
+  navigator.geolocation?.getCurrentPosition(pos=>map.setView([pos.coords.latitude,pos.coords.longitude],14));
+  map.on('click',e=>{if(pinMode)handleMapTap(e.latlng.lat,e.latlng.lng)});
+}
+
+// ── TAP-TO-PIN ────────────────────────────────────
+function enterPinMode(){
+  pinMode=true;
+  document.getElementById('map').classList.add('pinmode');
+  document.getElementById('pinBanner').style.display='block';
+  document.getElementById('pinCancel').style.display='block';
+  document.querySelector('.fab-add').style.opacity='0';
+  document.querySelector('.fab-add').style.pointerEvents='none';
+  document.getElementById('fabPin').style.opacity='0';
+  document.getElementById('fabPin').style.pointerEvents='none';
+}
+
+function exitPinMode(){
+  pinMode=false;
+  document.getElementById('map').classList.remove('pinmode');
+  document.getElementById('pinBanner').style.display='none';
+  document.getElementById('pinCancel').style.display='none';
+  document.querySelector('.fab-add').style.opacity='1';
+  document.querySelector('.fab-add').style.pointerEvents='';
+  document.getElementById('fabPin').style.opacity='1';
+  document.getElementById('fabPin').style.pointerEvents='';
+  if(tempPin){map.removeLayer(tempPin);tempPin=null}
+}
+
+async function handleMapTap(lat,lng){
+  exitPinMode();
+  // Drop a temporary marker
+  tempPin=L.circleMarker([lat,lng],{radius:10,color:'#fff',weight:3,fillColor:'#7F77DD',fillOpacity:1}).addTo(map);
+  // Reverse geocode
+  let name='',address='';
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=18`,{headers:{'Accept-Language':'en'}});
+    const d=await r.json();
+    name=d.name||'';
+    const a=d.address||{};
+    address=[a.road||a.pedestrian,a.suburb||a.neighbourhood,a.city||a.town].filter(Boolean).join(', ');
+    if(!name&&d.display_name)name=d.display_name.split(',')[0];
+  }catch(e){}
+  selPlace={name,address,lat,lng,fromPin:true};
+  openAdd(null,{name,address,lat,lng});
+}
+
+function renderMapMarkers(){
+  if(!map)return;
+  layerGroup.clearLayers();
+  getFiltered().forEach(p=>{
+    if(!p.lat||!p.lng)return;
+    const color=p.color||'#7F77DD';
+    const icon=L.divIcon({
+      className:'',
+      html:`<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${color};border:2px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.2)"><span style="transform:rotate(45deg);font-size:13px;line-height:1">🍴</span></div>`,
+      iconSize:[28,28],iconAnchor:[14,28],popupAnchor:[0,-32]
+    });
+    const sh='★'.repeat(p.rating)+'<span style="color:#ddd">'+'★'.repeat(5-p.rating)+'</span>';
+    L.marker([p.lat,p.lng],{icon}).bindPopup(`
+      <div class="lpop">
+        <div class="lpop-name">${esc(p.name)}</div>
+        ${p.address?`<div class="lpop-addr">${esc(p.address)}</div>`:''}
+        <div class="lpop-badges">
+          ${p.who?`<span class="badge bw" style="font-size:10px;padding:2px 7px">${esc(p.who)}</span>`:''}
+          ${p.price?`<span class="badge bp" style="font-size:10px;padding:2px 7px">${esc(p.price)}</span>`:''}
+        </div>
+        ${p.rating?`<div class="lpop-stars">${sh}</div>`:''}
+        ${p.notes?`<div class="lpop-notes">${esc(p.notes)}</div>`:''}
+        <div class="lpop-btns">
+          <button class="lpop-edit" onclick="openEdit('${p.id}')">Edit</button>
+          <button class="lpop-del" onclick="delFromMap('${p.id}')">Remove</button>
+        </div>
+      </div>`,{maxWidth:230}).addTo(layerGroup);
+  });
+}
+
+window.delFromMap=async function(id){
+  if(!confirm('Remove this spot?'))return;
+  await deletePlace(id);render();toast('Removed');
+}
+
+// ── SEARCH ────────────────────────────────────────
+function onSearch(val){
+  clearTimeout(srchTimer);
+  const box=document.getElementById('sdrop');
+  if(!val||val.length<2){box.classList.add('hidden');return}
+  box.innerHTML='<div class="sloading">Searching…</div>';
+  box.classList.remove('hidden');
+  srchTimer=setTimeout(()=>doPhotonSearch(val),380);
+}
+
+async function doPhotonSearch(q){
+  const box=document.getElementById('sdrop');
+  try{
+    const r=await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${BLAT}&lon=${BLNG}&limit=10&lang=en`);
+    const data=await r.json();
+    const food=new Set(['restaurant','cafe','bar','fast_food','food_court','pub','bakery','ice_cream']);
+    let res=data.features||[];
+    const fr=res.filter(f=>{const p=f.properties;return food.has(p.osm_value)||food.has(p.type)});
+    const fin=(fr.length>=2?fr:res).slice(0,7);
+    if(!fin.length){
+      box.innerHTML=manualOption(q);return;
+    }
+    window._ph=fin;
+    box.innerHTML=fin.map((f,i)=>{
+      const p=f.properties;
+      const name=p.name||p.street||q;
+      const addr=[p.street,p.city,p.state].filter(Boolean).join(', ');
+      return`<div class="si" onclick="selectPhoton(${i})"><div class="sin">${esc(name)}</div><div class="sia">${esc(addr)||'India'}</div></div>`;
+    }).join('')+manualOption(q);
+  }catch(e){box.innerHTML=manualOption(q)}
+}
+
+function manualOption(q){
+  return`<div class="si" onclick="selectManual('${esc(q)}')"><div class="sin" style="color:var(--txt3)">+ Add "${esc(q)}" manually</div></div>`;
+}
+
+function selectPhoton(i){
+  const f=window._ph[i],p=f.properties;
+  const[lng,lat]=f.geometry.coordinates;
+  const name=p.name||p.street||document.getElementById('fSearch').value;
+  const addr=[p.housenumber,p.street,p.district||p.city,p.state].filter(Boolean).join(', ');
+  selPlace={name,address:addr,lat,lng};
+  showSelBox();
+  document.getElementById('sdrop').classList.add('hidden');
+}
+
+function selectManual(name){
+  const existing=selPlace?.fromPin?selPlace:{};
+  selPlace={...existing,name,address:existing.address||''};
+  document.getElementById('fSearch').value=name;
+  showSelBox();
+  document.getElementById('sdrop').classList.add('hidden');
+}
+
+function showSelBox(){
+  document.getElementById('fSearch').value=selPlace.name;
+  document.getElementById('selBox').style.display='block';
+  document.getElementById('selBox').innerHTML=`<div class="selbox">
+    <div style="min-width:0">
+      <div class="selbox-name">${esc(selPlace.name)}</div>
+      ${selPlace.address?`<div class="selbox-addr">${esc(selPlace.address)}</div>`:''}
+      ${selPlace.lat?`<div class="selbox-addr" style="opacity:.45;font-size:10px">📍 pinned on map</div>`:''}
+    </div>
+    <button class="selbox-x" onclick="clearSearch()">✕</button>
+  </div>`;
+}
+
+function clearSearch(){
+  selPlace=null;
+  document.getElementById('fSearch').value='';
+  document.getElementById('selBox').style.display='none';
+}
+
+// ── ADD / EDIT ─────────────────────────────────────
+function openAdd(id, pinData=null){
+  editingId=id;
+  const isEdit=!!id;
+  document.getElementById('addTitle').textContent=isEdit?'Edit spot':'Add a spot';
+  document.getElementById('saveBtn').textContent=isEdit?'Save changes':'Save spot';
+
+  if(isEdit){
+    const p=places.find(x=>x.id===id);if(!p)return;
+    selPlace={name:p.name,address:p.address,lat:p.lat,lng:p.lng};
+    document.getElementById('fSearch').value=p.name;
+    document.getElementById('fWhoI').value=p.who||'';
+    document.getElementById('fPriceI').value=p.price||'';
+    document.getElementById('fNotes').value=p.notes||'';
+    setStar(p.rating||0);
+    showSelBox();
+  } else {
+    if(pinData){
+      selPlace={name:pinData.name,address:pinData.address,lat:pinData.lat,lng:pinData.lng,fromPin:true};
+      document.getElementById('fSearch').value=pinData.name||'';
+      if(pinData.lat)showSelBox(); else document.getElementById('selBox').style.display='none';
+    } else {
+      selPlace=null;
+      document.getElementById('fSearch').value='';
+      document.getElementById('selBox').style.display='none';
+    }
+    document.getElementById('fWhoI').value='';
+    document.getElementById('fPriceI').value='';
+    document.getElementById('fNotes').value='';
+    setStar(0);
+  }
+  document.getElementById('sdrop').classList.add('hidden');
+  openOv('addOv');
+}
+
+function openEdit(id){
+  layerGroup.eachLayer(l=>{if(l.closePopup)l.closePopup()});
+  closeOv('detOv');
+  openAdd(id);
+}
+
+async function savePlace(){
+  const name=(selPlace?.name||document.getElementById('fSearch').value).trim();
+  if(!name){toast('Please enter a place name');return}
+  const isEdit=!!editingId;
+  let p;
+  if(isEdit){
+    const orig=places.find(x=>x.id===editingId)||{};
+    p={...orig,name,address:selPlace?.address??orig.address??'',lat:selPlace?.lat??orig.lat,lng:selPlace?.lng??orig.lng,
+       who:document.getElementById('fWhoI').value.trim(),price:document.getElementById('fPriceI').value,
+       rating:starVal,notes:document.getElementById('fNotes').value.trim()};
+  } else {
+    p={id:Date.now().toString(),name,address:selPlace?.address||'',lat:selPlace?.lat||null,lng:selPlace?.lng||null,
+       who:document.getElementById('fWhoI').value.trim(),price:document.getElementById('fPriceI').value,
+       rating:starVal,notes:document.getElementById('fNotes').value.trim(),
+       color:COLORS[places.length%COLORS.length],created_at:new Date().toISOString()};
+  }
+  await persistPlace(p,isEdit);
+  if(tempPin){map.removeLayer(tempPin);tempPin=null}
+  closeOv('addOv');
+  render();
+  toast(isEdit?'Updated ✓':'Spot saved! 📍');
+  if(map&&p.lat)map.setView([p.lat,p.lng],15);
+}
+
+// ── FILTERS ───────────────────────────────────────
+function getFiltered(){
+  return places.filter(p=>{
+    if(filters.who&&!(p.who||'').toLowerCase().includes(filters.who.toLowerCase()))return false;
+    if(filters.price&&p.price!==filters.price)return false;
+    if(filters.rating){
+      const m=parseInt(filters.rating);
+      if(filters.rating==='5'&&p.rating!==5)return false;
+      if(filters.rating!=='5'&&p.rating<m)return false;
+    }
+    return true;
+  });
+}
+function applyFilters(){
+  filters.who=document.getElementById('fWho').value;
+  filters.price=document.getElementById('fPrice').value;
+  filters.rating=document.getElementById('fRating').value;
+  ['fWho','fPrice','fRating'].forEach(id=>document.getElementById(id).classList.toggle('on',document.getElementById(id).value!==''));
+  render();
+}
+function clearFilters(){
+  filters={who:'',price:'',rating:''};
+  ['fWho','fPrice','fRating'].forEach(id=>{document.getElementById(id).value='';document.getElementById(id).classList.remove('on')});
+  render();
+}
+function updateWhoFilter(){
+  const sel=document.getElementById('fWho'),cur=sel.value;
+  const whos=[...new Set(places.map(p=>p.who).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">Who</option>'+whos.map(w=>`<option${cur===w?' selected':''}>${esc(w)}</option>`).join('');
+}
+
+// ── RENDER ────────────────────────────────────────
+function render(){
+  updateWhoFilter();
+  const f=getFiltered();
+  document.getElementById('cpill').textContent=places.length?`(${f.length}/${places.length})`:'';
+  if(currentTab==='map')renderMapMarkers();
+  else renderList();
+}
+
+function renderList(){
+  const el=document.getElementById('listView'),f=getFiltered();
+  if(!f.length){
+    el.innerHTML=`<div class="empty"><div class="empty-icon">${places.length?'🔍':'🗺️'}</div><div class="empty-label">${places.length?'No matches — clear a filter':'No spots yet. Tap + to add your first!'}</div></div>`;
+    return;
+  }
+  el.innerHTML=f.map(p=>{
+    const sh='★'.repeat(p.rating)+`<span class="cdim">${'★'.repeat(5-p.rating)}</span>`;
+    return`<div class="card" onclick="showDetail('${p.id}')">
+      <div class="crow">
+        <div class="cav" style="background:${p.color||'#7F77DD'}22">🍴</div>
+        <div class="cbody">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div class="cname">${esc(p.name)}</div>
+            ${p.rating?`<div class="cstars">${sh}</div>`:''}
+          </div>
+          ${p.address?`<div class="caddr">${esc(p.address)}</div>`:''}
+          <div class="badges">
+            ${p.who?`<span class="badge bw">${esc(p.who)}</span>`:''}
+            ${p.price?`<span class="badge bp">${esc(p.price)}</span>`:''}
+          </div>
+        </div>
+      </div>
+      ${p.notes?`<div class="cnotes">${esc(p.notes)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ── DETAIL ────────────────────────────────────────
+function showDetail(id){
+  const p=places.find(x=>x.id===id);if(!p)return;
+  const sh='★'.repeat(p.rating)+`<span style="color:#ddd">${'★'.repeat(5-p.rating)}</span>`;
+  document.getElementById('detSheet').innerHTML=`
+    <div class="shandle"></div>
+    <div style="display:flex;align-items:center;gap:11px;margin-bottom:12px">
+      <div style="width:44px;height:44px;border-radius:50%;background:${p.color||'#7F77DD'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🍴</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:16px;font-weight:700;color:var(--txt)">${esc(p.name)}</div>
+        ${p.address?`<div style="font-size:11px;color:var(--txt3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.address)}</div>`:''}
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px">
+      <div class="badges" style="margin:0">
+        ${p.who?`<span class="badge bw">${esc(p.who)}</span>`:''}
+        ${p.price?`<span class="badge bp">${esc(p.price)}</span>`:''}
+      </div>
+      ${p.rating?`<div style="color:#EF9F27;font-size:18px;letter-spacing:-1px">${sh}</div>`:''}
+    </div>
+    ${p.notes?`<div style="font-size:13px;color:var(--txt2);background:var(--sur2);border-radius:var(--rad2);padding:10px 11px;margin-bottom:12px;line-height:1.6">${esc(p.notes)}</div>`:''}
+    ${p.lat?`<button onclick="flyTo(${p.lat},${p.lng})" style="width:100%;padding:10px;background:var(--pl);color:var(--pt);border:none;border-radius:var(--rad2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:10px">Show on map</button>`:''}
+    <div class="sbtns">
+      <button class="bdanger" onclick="confirmDel('${p.id}')">Remove</button>
+      <button class="bedit" onclick="openEdit('${p.id}')">Edit</button>
+    </div>`;
+  openOv('detOv');
+}
+
+function flyTo(lat,lng){closeOv('detOv');switchTab('map');map.setView([lat,lng],16)}
+async function confirmDel(id){
+  if(!confirm('Remove this spot?'))return;
+  await deletePlace(id);closeOv('detOv');render();toast('Removed');
+}
+
+// ── UI ─────────────────────────────────────────────
+function switchTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['map','list'][i]===tab));
+  document.getElementById('mapView').style.display=tab==='map'?'block':'none';
+  document.getElementById('listView').style.display=tab==='list'?'block':'none';
+  document.getElementById('fabPin').style.display=tab==='map'?'flex':'none';
+  render();
+}
+function openOv(id){document.getElementById(id).classList.add('open')}
+function closeOv(id){document.getElementById(id).classList.remove('open')}
+function ovClick(e,id){if(e.target.id===id)closeOv(id)}
+function setStar(n){starVal=n;document.querySelectorAll('.sb2').forEach((b,i)=>b.classList.toggle('lit',i<n))}
+let toastT;
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2400)}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+
+document.getElementById('fSearch').addEventListener('blur',()=>{
+  setTimeout(()=>document.getElementById('sdrop').classList.add('hidden'),220);
+});
+
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+init();
+</script>
+</body>
+</html>
